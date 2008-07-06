@@ -7,19 +7,23 @@ class BaseConnectionHandler(object):
         self._sock = sock
         self.addr = addr
         
-        def _handle_read(ev, sock, evtype, *args):
-            try:
-                data = sock.recv(1024)
-            except socket.error, e:
-                print e
-                sock.close()
-                return
-            self.receive_data(data)
-            ev = event.event(_handle_read, handle=self._sock, evtype=event.EV_READ)
-            ev.add()
-            
-        ev = event.event(_handle_read, handle=self._sock, evtype=event.EV_READ)
-        ev.add()
+        read_ev = event.event(self._handle_read, handle=self._sock, evtype=event.EV_READ)
+        read_ev.add()
+    
+    def _handle_read(self, ev, sock, evtype, *args):
+        try:
+            data = sock.recv(io.BUFFER_LENGTH)
+        except socket.error, e:
+            print e
+            sock.close()
+            return
+        
+        # invoke callback upon receiving data
+        self.receive_data(data)
+        
+        # bind to the read event for more data
+        read_ev = event.event(self._handle_read, handle=self._sock, evtype=event.EV_READ)
+        read_ev.add()
     
     def receive_data(self, data):
         "Callback func called upon receiving data. User is expected to munge the data as he wishes."
@@ -59,16 +63,18 @@ class BaseServer(object):
         event.dispatch()
 
 class BaseDeferred(object):
-    def __init__(self, operation, opargs, callback):
+    def __init__(self, operation, opargs, callback, path_to_socket):
         self._operation = operation
         self._opargs = opargs
         self._callback = callback
+        self._path_to_socket = path_to_socket
+        self._data = ""
         
         if os.fork() != 0:
             # in the master process, open a listening unix domain socket, and
             # wait for the result from the slave process.
             
-            sock = io.server_domain_socket("/tmp/foobar") # FIXME - dynamic socket filename
+            sock = io.server_domain_socket(self._path_to_socket)
             listen_ev = event.read(sock, self._on_worker_connect, sock)
             listen_ev.add()
         else:
@@ -78,7 +84,7 @@ class BaseDeferred(object):
             
             result = operation(*opargs)
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            sock.connect("/tmp/foobar")
+            sock.connect(self._path_to_socket)
             sock.send(str(result))
             sock.close()
             sys.exit(0)
@@ -90,6 +96,16 @@ class BaseDeferred(object):
         sock.close()
     
     def _on_worker_complete(self, sock):
-        data = sock.recv(1024)
-        sock.close()
-        self._callback(data)
+        try:
+            data = sock.recv(io.BUFFER_LENGTH)
+        except socket.error, e:
+            sock.close()
+            return
+        self._data += data
+        if self._callback is not None:
+            self._callback(self._data)
+        
+        # FIXME - handle result data longer than io.BUFFER_LENGTH ?   
+        #read_ev = event.read(sock, self._on_worker_complete, sock)
+        #read_ev.add()
+        

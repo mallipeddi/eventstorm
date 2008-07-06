@@ -1,6 +1,8 @@
 import socket
 import os
+from datetime import datetime
 
+BUFFER_LENGTH = 1024
 LQUEUE_SIZE = 500
 
 def server_socket(addr, port):
@@ -29,4 +31,11 @@ def server_domain_socket(filepath):
     sock.listen(1)
     return sock
 
-    
+
+def unique_domain_socket_name():
+    while True:
+        now = datetime.now()
+        fname = "/tmp/%s_%s%s" % (str(os.getpid()), now.strftime("%Y%m%d%H%M%S"), getattr(now, 'microsecond'))
+        if not os.path.exists(fname):
+            break
+    return fname

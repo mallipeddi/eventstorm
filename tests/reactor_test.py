@@ -35,4 +35,18 @@ def test_reactor_loop():
     data = s.recv(1024)
     s.close()
     assert data == "pong"
+
+def test_exception_inside_reactor_loop():
     
+    class SomeException(Exception):
+        def __init__(self, message):
+            Exception.__init__(self, message)
+    
+    try:
+        with eventstorm.loop():
+            raise SomeException("some exception")
+    except SomeException, e:
+        assert True
+        return
+    
+    assert False

@@ -9,5 +9,8 @@ class loop(object):
         event.init()
     
     def __exit__(self, type, value, tb):
-        event.dispatch()
-        return True
+        if tb is None: # if there were no exceptions in the `with` block
+            event.dispatch()
+            return True
+        else:
+            return False

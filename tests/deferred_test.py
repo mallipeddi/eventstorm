@@ -19,6 +19,7 @@ class FactorialThread(threading.Thread):
 
     def run(self):
         with eventstorm.loop():
+            eventstorm.deferred(factorial, (5, ), on_complete_factorial)
             eventstorm.deferred(factorial, (10, ), on_complete_factorial)
 
 def test_deferred_factorial():
@@ -27,4 +28,11 @@ def test_deferred_factorial():
     
     print "Waiting for answer..."
     assert True
-    
+
+def test_invalid_callback():
+    try:
+        eventstorm.deferred(factorial, (10, ), 10) # 10 is an invalid callback
+    except eventstorm.exceptions.CallbackNotCallableException, e:
+        assert True
+        return
+    assert False
