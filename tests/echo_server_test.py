@@ -5,7 +5,7 @@ import threading
 class EchoServer(eventstorm.BaseServer):
     def accept_connection(self, connection):
         pass
-class EchoHandler(eventstorm.BaseConnection):
+class EchoHandler(eventstorm.BaseConnectionHandler):
     def receive_data(self, data):
         self.send_data(data)
 

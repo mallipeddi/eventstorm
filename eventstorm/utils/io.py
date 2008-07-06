@@ -1,4 +1,5 @@
 import socket
+import os
 
 LQUEUE_SIZE = 500
 
@@ -16,3 +17,16 @@ def client_socket(addr, port):
     sock.setblocking(0)
     sock.connect_ex((addr, port))
     return sock
+
+def server_domain_socket(filepath):
+    """ Return a new listening UNIX domain socket bound to the given filepath. """
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        os.remove(filepath)
+    except OSError:
+        pass
+    sock.bind(filepath)
+    sock.listen(1)
+    return sock
+
+    
