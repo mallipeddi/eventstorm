@@ -22,9 +22,13 @@ def test_reactor_loop():
     t = PingPongThread()
     t.start()
     
+    import time
+    time.sleep(1)
+    
     import socket
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(('', 8000))
+    err = s.connect_ex(('', 8000))
+    print err
     s.send("hello")
     data = s.recv(1024)
     s.close()
