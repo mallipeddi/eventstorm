@@ -23,7 +23,7 @@ class BaseConnectionHandler(object):
             self.handle_close(error=e.args[0])
             return
         
-        if(len(data) == 0): # connection closed by the other party
+        if len(data) == 0: # connection closed by the other party
             sock.close()
             self._read_ev.delete()
             self.handle_close()
@@ -61,6 +61,10 @@ class BaseConnectionHandler(object):
         ev.add()
 
     def handle_close(self, error=None):
+        """Callback func called when the socket closes.
+        
+        User is expected to override this method and do any clean-up."""
+        
         if error is not None:
             print "Connection closed due to error (errno = %d)" % error
         else:
@@ -87,18 +91,19 @@ class BaseServer(object):
         event.dispatch()
 
 class BaseDeferred(object):
-    def __init__(self, operation, opargs, callback, path_to_socket):
+    def __init__(self, operation, opargs, callback):
         self._operation = operation
         self._opargs = opargs
         self._callback = callback
-        self._path_to_socket = path_to_socket
-        self._data = ""
+        self._result_buffer = ""
         
-        if os.fork() != 0:
+        somePid = os.fork()
+        
+        if somePid != 0:
             # in the master process, open a listening unix domain socket, and
             # wait for the result from the slave process.
             
-            sock = io.server_unix_socket(self._path_to_socket)
+            sock = io.server_unix_socket("/tmp/eventstorm_p_%d" % somePid)
             listen_ev = event.read(sock, self._on_worker_connect, sock)
             listen_ev.add()
         else:
@@ -107,28 +112,43 @@ class BaseDeferred(object):
             # over the domain socket.
             
             result = operation(*opargs)
-            sock = io.client_unix_socket(self._path_to_socket)
-            sock.send(str(result))
+            sock = io.client_unix_socket("/tmp/eventstorm_p_%d" % os.getpid(), blocking=True)
+            sock.sendall(str(result))
             sock.close()
-            sys.exit(0)
+            os._exit(0)
     
     def _on_worker_connect(self, sock):
         new_sock, new_addr = sock.accept()
-        read_ev = event.read(new_sock, self._on_worker_complete, new_sock)
-        read_ev.add()
+        new_sock.setblocking(False)
+        
+        self._worker_read_ev = event.event(self._on_worker_complete, handle=new_sock, evtype=event.EV_READ|event.EV_PERSIST)
+        self._worker_read_ev.add()
+        
+        #read_ev = event.read(new_sock, self._on_worker_complete, new_sock)
+        #read_ev.add()
+        
+        # close the listening server socket since there's only 1 worker
         sock.close()
     
-    def _on_worker_complete(self, sock):
+    def _on_worker_complete(self, ev, sock, evtype, *args):
         try:
             data = sock.recv(io.BUFFER_LENGTH)
         except socket.error, e:
+            print e, e.args[0] # errno
             sock.close()
+            self._worker_read_ev.delete()
             return
-        self._data += data
-        if self._callback is not None:
-            self._callback(self._data)
-        
-        # FIXME - handle result data longer than io.BUFFER_LENGTH ?   
-        #read_ev = event.read(sock, self._on_worker_complete, sock)
-        #read_ev.add()
+
+        if len(data) == 0: # connection closed by the worker process
+            # clean-up
+            sock.close()
+            self._worker_read_ev.delete()
+            
+            # send the result received from the worker to
+            # the user-supplied callback function (if any)
+            if self._callback is not None:
+                self._callback(self._result_buffer)
+            return
+        else: # append data received from worker to the result buffer
+            self._result_buffer += data
         

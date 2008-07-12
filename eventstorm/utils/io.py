@@ -22,25 +22,21 @@ def client_socket(addr, port):
     return sock
 
 def server_unix_socket(filepath):
-    """ Return a new listening UNIX domain socket bound to the given filepath. """
+    """ Return a new non-blocking listening UNIX domain socket bound to the given filepath. """
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+
     try:
         os.remove(filepath)
     except OSError:
         pass
+    sock.setblocking(False)
     sock.bind(filepath)
     sock.listen(BACKLOG)
     return sock
 
-def client_unix_socket(filepath):
+def client_unix_socket(filepath, blocking=False):
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    sock.connect(filepath)
+    sock.setblocking(blocking)
+    resp = sock.connect_ex(filepath)
+    print resp
     return sock
-
-def unique_domain_socket_name():
-    while True:
-        now = datetime.now()
-        fname = "/tmp/%s_%s%s" % (str(os.getpid()), now.strftime("%Y%m%d%H%M%S"), getattr(now, 'microsecond'))
-        if not os.path.exists(fname):
-            break
-    return fname
