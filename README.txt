@@ -1,6 +1,6 @@
 eventstorm
 
-eventstorm is a Python library which provides event-driven I/O using the reactor loop. eventstorm is built on top of libevent/pyevent and is heavily inspired by the eventmachine Ruby library.
+eventstorm is a Python library which provides event-driven I/O using the reactor loop. eventstorm is built using libevent/pyevent and is heavily inspired by the eventmachine Ruby library.
 
 eventstorm is pre-alpha. Play with it at your own risk!
 

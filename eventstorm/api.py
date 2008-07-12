@@ -9,7 +9,7 @@ from utils import io
 from exceptions import CallbackNotCallableException
 
 def tcp_server(addr=('', 8080), handler=BaseConnectionHandler):
-    bs = BaseServer(addr=addr[0], port=addr[1], connection_handler=handler)
+    bs = BaseServer(addr, handler)
 
 def deferred(operation, opargs=(), callback=None, path_to_socket=None):
     if callback is not None and not callable(callback):

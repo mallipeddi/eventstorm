@@ -6,45 +6,69 @@ class BaseConnectionHandler(object):
     def __init__(self, sock, addr):
         self._sock = sock
         self.addr = addr
+        self._to_be_sent = "" # write buffer
         
-        read_ev = event.event(self._handle_read, handle=self._sock, evtype=event.EV_READ)
-        read_ev.add()
+        self._sock.setblocking(False)
+        
+        self._read_ev = event.event(self._handle_read, handle=self._sock, evtype=event.EV_READ|event.EV_PERSIST)
+        self._read_ev.add()
     
     def _handle_read(self, ev, sock, evtype, *args):
         try:
             data = sock.recv(io.BUFFER_LENGTH)
         except socket.error, e:
-            print e
+            print e, e.args[0] # errno
             sock.close()
+            self._read_ev.delete()
+            self.handle_close(error=e.args[0])
+            return
+        
+        if(len(data) == 0): # connection closed by the other party
+            sock.close()
+            self._read_ev.delete()
+            self.handle_close()
             return
         
         # invoke callback upon receiving data
         self.receive_data(data)
-        
-        # bind to the read event for more data
-        read_ev = event.event(self._handle_read, handle=self._sock, evtype=event.EV_READ)
-        read_ev.add()
     
     def receive_data(self, data):
         "Callback func called upon receiving data. User is expected to munge the data as he wishes."
         print "Received data: %s" % data
     
     def send_data(self, data):
-        "Send the data over this connection (non-blocking send)."
-        def _handle_write(ev, sock, evtype, *args):
+        "Send the data over this connection."
+        def _handle_write():
             try:
-                sent = sock.send(data)
+                sent = self._sock.send(self._to_be_sent)
             except socket.error, e:
-                print e
-                sock.close()
-            print "Sent: %d" %  sent
-        ev = event.event(_handle_write, handle=self._sock, evtype=event.EV_WRITE)
+                print e, e.args[0]
+                self._sock.close()
+                self.handle_close(error=e.args[0])
+                return
+            if sent < len(self._to_be_sent):
+                # all the data to be sent has not been sent yet.
+                # so reschedule a new write event to send the rest of the data.
+                self._to_be_sent = self._to_be_sent[sent:]
+                ev = event.write(self._sock, _handle_write)
+                ev.add()
+        
+        # append data to the write buffer
+        self._to_be_sent += data
+        
+        # schedule a write event
+        ev = event.write(self._sock, _handle_write)
         ev.add()
 
+    def handle_close(self, error=None):
+        if error is not None:
+            print "Connection closed due to error (errno = %d)" % error
+        else:
+            print "Connection closed."
+
 class BaseServer(object):
-    def __init__(self, addr='', port=8080, connection_handler=BaseConnectionHandler):
-        self.addr = addr
-        self.port = port
+    def __init__(self, addr=('', 8080), connection_handler=BaseConnectionHandler):
+        self.addr, self.port = addr
         self._sock = io.server_socket(self.addr, self.port)
         self._connection_handler = connection_handler
         listen_ev = event.event(self._accept_connection, handle=self._sock, evtype=event.EV_READ | event.EV_PERSIST)
@@ -56,7 +80,7 @@ class BaseServer(object):
         self.accept_connection(new_connection)
     
     def accept_connection(self, connection):
-        "Callback func called upon accepting a new connection."
+        "Callback function called upon accepting a new connection."
         print "accepted new connection..."
     
     def run(self):
@@ -74,7 +98,7 @@ class BaseDeferred(object):
             # in the master process, open a listening unix domain socket, and
             # wait for the result from the slave process.
             
-            sock = io.server_domain_socket(self._path_to_socket)
+            sock = io.server_unix_socket(self._path_to_socket)
             listen_ev = event.read(sock, self._on_worker_connect, sock)
             listen_ev.add()
         else:
@@ -83,8 +107,7 @@ class BaseDeferred(object):
             # over the domain socket.
             
             result = operation(*opargs)
-            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            sock.connect(self._path_to_socket)
+            sock = io.client_unix_socket(self._path_to_socket)
             sock.send(str(result))
             sock.close()
             sys.exit(0)

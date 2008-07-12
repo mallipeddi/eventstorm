@@ -20,10 +20,44 @@ def test_simple_echo():
     t.start()
     
     import socket
-    msg = 'Hello, world'
+    msg = "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum." * 10
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(('', 8080))
-    s.send(msg)
-    data = s.recv(1024)
+    try:
+        s.connect(('', 8080))
+    except socket.error, e:
+        print e, e.args[0]
+        s.close()
+        assert False
+        return
+    
+    # send all of msg to server
+    try:
+        s.sendall(msg)
+    except socket.error, e:
+        print e, e.args[0]
+        s.close()
+        assert False
+        return
+    
+    # recv all of msg from server
+    accData = ""
+    while(True):
+        try:
+            data = s.recv(eventstorm.utils.io.BUFFER_LENGTH)
+        except socket.error, e:
+            print e, e.args[0]
+            s.close()
+            assert False
+            return            
+        if len(data) == 0:
+            #print "Connection closed"
+            s.close()
+            assert False
+            return
+        else:
+            print data
+            accData += data
+        if len(accData) >= len(msg):
+            break
     s.close()
-    assert data == msg
+    assert accData == msg

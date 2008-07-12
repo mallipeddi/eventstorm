@@ -2,25 +2,26 @@ import socket
 import os
 from datetime import datetime
 
-BUFFER_LENGTH = 1024
-LQUEUE_SIZE = 500
+BUFFER_LENGTH = 4096
+BACKLOG = 5
 
 def server_socket(addr, port):
-    """ Return a new listening socket bound to the given interface and port. """
+    """ Return a new non-blocking listening socket bound to the given interface and port. """
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.setblocking(False)
     sock.bind(('', port))
-    sock.listen(LQUEUE_SIZE)
+    sock.listen(BACKLOG)
     return sock
 
 def client_socket(addr, port):
-    """ Return a new (non-blocking) client socket connected to the given address and port. """
+    """ Return a new non-blocking client socket connected to the given address and port. """
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.setblocking(0)
+    sock.setblocking(False)
     sock.connect_ex((addr, port))
     return sock
 
-def server_domain_socket(filepath):
+def server_unix_socket(filepath):
     """ Return a new listening UNIX domain socket bound to the given filepath. """
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
@@ -28,9 +29,13 @@ def server_domain_socket(filepath):
     except OSError:
         pass
     sock.bind(filepath)
-    sock.listen(1)
+    sock.listen(BACKLOG)
     return sock
 
+def client_unix_socket(filepath):
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.connect(filepath)
+    return sock
 
 def unique_domain_socket_name():
     while True:
