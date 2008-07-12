@@ -1,4 +1,4 @@
-import os, socket, sys
+import os, socket, sys, errno, time
 import event
 from eventstorm.utils import io
 
@@ -112,9 +112,26 @@ class BaseDeferred(object):
             # over the domain socket.
             
             result = operation(*opargs)
-            sock = io.client_unix_socket("/tmp/eventstorm_p_%d" % os.getpid(), blocking=True)
-            sock.sendall(str(result))
-            sock.close()
+            path_to_socket = "/tmp/eventstorm_p_%d" % os.getpid()
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            while(True):
+                try:
+                    sock.connect(path_to_socket)
+                except socket.error, e:
+                    #print e.args[0]
+                    errcode = e.args[0]
+                    if errcode == errno.ENOENT:
+                        #print "going to retry..."
+                        sys.stdout.flush()
+                        # retry after sleeping
+                        time.sleep(1)
+                        continue
+                    sock.close()
+                    sock = None
+                break
+            if sock:
+                sock.sendall(str(result))
+                sock.close()
             os._exit(0)
     
     def _on_worker_connect(self, sock):

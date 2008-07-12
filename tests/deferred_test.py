@@ -36,3 +36,28 @@ def test_invalid_callback():
         assert True
         return
     assert False
+
+def some_disk_operation():
+    f = open("fixture.txt", "r")
+    count = 0
+    for line in f:
+        count += 1
+    return count
+
+def on_complete_some_disk_operation(lines):
+    print "Line count: %s" % lines
+
+class DiskOperationThread(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
+    
+    def run(self):
+        with eventstorm.loop():
+            eventstorm.deferred(some_disk_operation, callback=on_complete_some_disk_operation)
+
+def test_read_from_disk():
+    t = DiskOperationThread()
+    t.start()
+    
+    print "Waiting for answer..."
+    assert True

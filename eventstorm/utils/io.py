@@ -1,5 +1,4 @@
-import socket
-import os
+import socket, errno, os
 from datetime import datetime
 
 BUFFER_LENGTH = 4096
@@ -34,9 +33,5 @@ def server_unix_socket(filepath):
     sock.listen(BACKLOG)
     return sock
 
-def client_unix_socket(filepath, blocking=False):
-    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    sock.setblocking(blocking)
-    resp = sock.connect_ex(filepath)
-    print resp
-    return sock
+def client_unix_socket(filepath):
+    pass
